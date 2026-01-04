@@ -20,6 +20,8 @@ LED_HOLD = 0.5
 mute = False
 volume = 1.0
 last_audio_time = 0
+last_user_ip = "None"
+current_audio_level = 0.0
 leds = None
 start_time = time.time()
 
@@ -58,7 +60,6 @@ def toggle_mute():
 @app.route("/info")
 def info():
     try:
-        # Get IP address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.connect(("8.8.8.8", 80))
@@ -86,23 +87,46 @@ def info():
         print("Error in /info:", e)
         return jsonify({"error": str(e)}), 500
 
+@app.route("/status")
+def status():
+    try:
+        now = time.time()
+        connected = (now - last_audio_time) < 3.0
+        last_audio_fmt = time.strftime("%H:%M:%S", time.localtime(last_audio_time)) if last_audio_time > 0 else "Never"
+        return jsonify({
+            "connected": connected,
+            "last_audio_time": last_audio_fmt,
+            "last_user_ip": last_user_ip,
+            "mute": mute,
+            "audio_level": float(current_audio_level)
+        })
+    except Exception as e:
+        print("Error in /status:", e)
+        return jsonify({"error": str(e)}), 500
+
 def start_web():
     app.run(host="0.0.0.0", port=8080)
 
 # ================== THREADS ==================
 def receiver():
+    global last_user_ip, current_audio_level
     while True:
-        data, _ = sock.recvfrom(CHUNK * 2)
-        if not q.full():
-            q.put(data)
+        try:
+            data, addr = sock.recvfrom(CHUNK * 2)
+            last_user_ip = addr[0]
+            if not q.full():
+                q.put(data)
+        except Exception as e:
+            print("Receiver error:", e)
 
 def player():
-    global last_audio_time
+    global last_audio_time, current_audio_level
     while True:
         data = q.get()
         now = time.time()
         if not mute:
             audio = np.frombuffer(data, dtype=np.int16)
+            current_audio_level = float(np.sqrt(np.mean(audio.astype(np.float32)**2)) / 32768)
             audio = np.clip(audio * volume, -32768, 32767).astype(np.int16)
             try:
                 play.stdin.write(audio.tobytes())
@@ -136,7 +160,6 @@ try:
         leds = Leds()
         tts.say("Intercom started", lang="en-GB")
 
-        # Start threads
         threading.Thread(target=receiver, daemon=True).start()
         threading.Thread(target=player, daemon=True).start()
         threading.Thread(target=led_manager, daemon=True).start()

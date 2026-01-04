@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <title>Intercom Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
+
 body {
     margin: 0;
     font-family: 'Segoe UI', system-ui, sans-serif;
@@ -12,7 +13,7 @@ body {
     color: #f7f7fa;
     min-height: 100vh;
 }
-.header {
+.div1 {
     width: 100%;
     text-align: center;
     padding: 36px 0 18px 0;
@@ -23,15 +24,16 @@ body {
     opacity: 0.93;
     text-shadow: 0 2px 12px #0006;
 }
-.dashboard {
+.dashboard-row {
     display: flex;
+    flex-direction: row;
     justify-content: center;
     align-items: flex-start;
     gap: 32px;
     flex-wrap: wrap;
     width: 100%;
     margin: 0 auto;
-    max-width: 900px;
+    max-width: 1100px;
 }
 .card {
     background: rgba(255,255,255,0.07);
@@ -43,12 +45,12 @@ body {
     flex: 1 1 320px;
     margin-bottom: 18px;
     transition: box-shadow 0.2s;
-}
-.card:not(:last-child) {
-    margin-right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 .card h2 {
-    text-align: center;
+    text-align: left;
     margin: 0 0 18px 0;
     font-size: 1.3em;
     font-weight: 600;
@@ -57,7 +59,7 @@ body {
 }
 .percent {
     font-size: 2.1em;
-    text-align: center;
+    text-align: left;
     font-weight: bold;
     margin-bottom: 8px;
     color: #7ed6fa;
@@ -101,29 +103,61 @@ button:hover {
     margin-top: 6px;
 }
 </style>
+</style>
 </head>
 <body>
-    <div class="header">🎙 Intercom Dashboard</div>
-    <div class="dashboard">
-        <div class="card">
-            <h2>Volume</h2>
-            <div class="percent"><span id="volValue">{{vol}}</span>%</div>
-            <input type="range" min="0" max="100" value="{{vol}}" oninput="setVolume(this.value)">
-            <button id="muteBtn" onclick="toggleMute()">{{ 'Unmute' if not mute else 'Mute' }}</button>
-        </div>
-        <div class="card">
-            <h2>Device Info</h2>
-            <div class="info">
-                <strong>Hostname:</strong> <span id="hostname">Loading...</span><br>
-                <strong>IP:</strong> <span id="ip">Loading...</span><br>
-                <strong>UDP Port:</strong> <span id="udpPort">Loading...</span><br>
-                <strong>HTTP Port:</strong> <span id="httpPort">Loading...</span><br>
-                <strong>Uptime:</strong> <span id="uptime">Loading...</span>
+    <div class="parent">
+        <div class="div1">🎙 Intercom project by Anish, Bowen, Runar</div>
+        <div class="dashboard-row">
+            <div class="card">
+                <h2>Volume</h2>
+                <div class="percent"><span id="volValue">{{vol}}</span>%</div>
+                <input type="range" min="0" max="100" value="{{vol}}" oninput="setVolume(this.value)">
+                <button id="muteBtn" onclick="toggleMute()">{{ 'Unmute' if not mute else 'Mute' }}</button>
+            </div>
+            <div class="card">
+                <h2>Device Info</h2>
+                <div class="info">
+                    <strong>Hostname:</strong> <span id="hostname">Loading...</span><br>
+                    <strong>IP:</strong> <span id="ip">Loading...</span><br>
+                    <strong>UDP Port:</strong> <span id="udpPort">Loading...</span><br>
+                    <strong>HTTP Port:</strong> <span id="httpPort">Loading...</span><br>
+                    <strong>Uptime:</strong> <span id="uptime">Loading...</span>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Status</h2>
+                <div class="info">
+                    <strong>Connected:</strong> <span id="connected">...</span><br>
+                    <strong>Last Audio Time:</strong> <span id="lastAudio">...</span><br>
+                    <strong>Last User IP:</strong> <span id="lastUserIp">...</span><br>
+                    <strong>Audio Level:</strong>
+                    <div style="background:#222; border-radius:6px; height:16px; width:100%; margin:6px 0;">
+                        <div id="audioLevelBar" style="background:#7ed6fa; height:100%; width:0%; border-radius:6px;"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
 <script>
+function updateStatus(){
+    fetch('/status')
+        .then(r => r.json())
+        .then(s => {
+            document.getElementById('connected').innerText = s.connected ? 'Yes' : 'No';
+            document.getElementById('lastAudio').innerText = s.last_audio_time;
+            document.getElementById('lastUserIp').innerText = s.last_user_ip;
+            // Audio level bar (0-1)
+            let pct = Math.round(Math.max(0, Math.min(1, s.audio_level)) * 100);
+            document.getElementById('audioLevelBar').style.width = pct + '%';
+        })
+        .catch(e => console.log('Failed to fetch status', e));
+}
+setInterval(updateStatus, 500);
+updateStatus();
+
+
 function setVolume(val){
     fetch('/set_volume?vol=' + val);
     document.getElementById('volValue').innerText = val;
