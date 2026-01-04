@@ -7,96 +7,121 @@
 <style>
 body {
     margin: 0;
-    font-family: system-ui, sans-serif;
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #23243a 0%, #2c5364 100%);
+    color: #f7f7fa;
+    min-height: 100vh;
+}
+.header {
+    width: 100%;
+    text-align: center;
+    padding: 36px 0 18px 0;
+    font-size: 2.1em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #fff;
+    opacity: 0.93;
+    text-shadow: 0 2px 12px #0006;
 }
 .dashboard {
-    background: rgba(255,255,255,0.08);
-    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 32px;
+    flex-wrap: wrap;
+    width: 100%;
+    margin: 0 auto;
+    max-width: 900px;
+}
+.card {
+    background: rgba(255,255,255,0.07);
     border-radius: 18px;
-    padding: 26px;
-    width: 92%;
-    max-width: 420px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+    padding: 28px 26px 22px 26px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    min-width: 290px;
+    max-width: 340px;
+    flex: 1 1 320px;
+    margin-bottom: 18px;
+    transition: box-shadow 0.2s;
 }
-h1 {
+.card:not(:last-child) {
+    margin-right: 0;
+}
+.card h2 {
     text-align: center;
-}
-.status {
-    text-align: center;
-    margin-bottom: 20px;
-}
-.badge {
-    padding: 6px 14px;
-    border-radius: 999px;
+    margin: 0 0 18px 0;
+    font-size: 1.3em;
     font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #e0e6f7;
 }
-.idle { background: #3498db; }
-.active { background: #2ecc71; }
-.muted { background: #e74c3c; }
-
 .percent {
-    font-size: 2.4em;
+    font-size: 2.1em;
     text-align: center;
     font-weight: bold;
+    margin-bottom: 8px;
+    color: #7ed6fa;
 }
-
 input[type=range] {
     width: 100%;
-    margin: 16px 0;
+    margin: 18px 0 10px 0;
+    accent-color: #3498db;
+    height: 6px;
+    border-radius: 6px;
+    background: #222;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
 }
-
 button {
     width: 100%;
-    padding: 14px;
-    font-size: 1.1em;
-    border-radius: 12px;
+    padding: 13px;
+    border-radius: 13px;
     border: none;
+    font-size: 1.08em;
     cursor: pointer;
-    font-weight: bold;
+    background: #3498db;
+    color: #fff;
+    margin-top: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
 }
-
-.mute {
-    background: #e74c3c;
-    color: white;
+button:hover {
+    background: #217dbb;
+    color: #eaf6ff;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
-
-.unmute {
-    background: #2ecc71;
-    color: #062;
-}
-
-.footer {
-    margin-top: 18px;
-    text-align: center;
-    font-size: 0.8em;
-    opacity: 0.7;
+.info {
+    font-size: 1em;
+    line-height: 1.7em;
+    color: #e0e6f7;
+    background: rgba(0,0,0,0.07);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 6px;
 }
 </style>
 </head>
-
 <body>
-<div class="dashboard">
-    <h1>🎙 Intercom</h1>
-
-    <div class="status">
-        Status:
-        <span id="statusBadge" class="badge idle">Idle</span>
+    <div class="header">🎙 Intercom Dashboard</div>
+    <div class="dashboard">
+        <div class="card">
+            <h2>Volume</h2>
+            <div class="percent"><span id="volValue">{{vol}}</span>%</div>
+            <input type="range" min="0" max="100" value="{{vol}}" oninput="setVolume(this.value)">
+            <button id="muteBtn" onclick="toggleMute()">{{ 'Unmute' if not mute else 'Mute' }}</button>
+        </div>
+        <div class="card">
+            <h2>Device Info</h2>
+            <div class="info">
+                <strong>Hostname:</strong> <span id="hostname">Loading...</span><br>
+                <strong>IP:</strong> <span id="ip">Loading...</span><br>
+                <strong>UDP Port:</strong> <span id="udpPort">Loading...</span><br>
+                <strong>HTTP Port:</strong> <span id="httpPort">Loading...</span><br>
+                <strong>Uptime:</strong> <span id="uptime">Loading...</span>
+            </div>
+        </div>
     </div>
-
-    <div class="percent"><span id="volValue">{{ vol }}</span>%</div>
-    <input type="range" min="0" max="100" value="{{ vol }}"
-           oninput="setVolume(this.value)">
-
-    <button id="muteBtn" onclick="toggleMute()">Mute</button>
-
-    <div class="footer">Intercom dashboard</div>
-</div>
 
 <script>
 function setVolume(val){
@@ -105,39 +130,26 @@ function setVolume(val){
 }
 
 function toggleMute(){
-    fetch('/toggle_mute', {method: 'POST'});
-}
-
-function updateStatus(){
-    fetch('/status')
+    fetch('/toggle_mute')
         .then(r => r.json())
-        .then(s => {
-            const badge = document.getElementById('statusBadge');
-            const btn = document.getElementById('muteBtn');
-
-            badge.className = 'badge';
-
-            if (s.mute){
-                badge.innerText = 'Muted';
-                badge.classList.add('muted');
-                btn.innerText = 'Unmute';
-                btn.className = 'unmute';
-            } else if (s.call_active){
-                badge.innerText = 'Active';
-                badge.classList.add('active');
-                btn.innerText = 'Mute';
-                btn.className = 'mute';
-            } else {
-                badge.innerText = 'Idle';
-                badge.classList.add('idle');
-                btn.innerText = 'Mute';
-                btn.className = 'mute';
-            }
+        .then(d => {
+            document.getElementById('muteBtn').innerText = d.mute ? 'Unmute' : 'Mute';
         });
 }
 
-setInterval(updateStatus, 500);
-updateStatus();
+function updateInfo(){
+    fetch('/info')
+        .then(r => r.json())
+        .then(i => {
+            document.getElementById('hostname').innerText = i.hostname;
+            document.getElementById('ip').innerText = i.ip;
+            document.getElementById('udpPort').innerText = i.udp_port;
+            document.getElementById('httpPort').innerText = i.http_port;
+            document.getElementById('uptime').innerText = i.uptime;
+        }).catch(e => console.log("Failed to fetch info", e));
+}
+setInterval(updateInfo, 5000);
+updateInfo();
 </script>
 </body>
 </html>
