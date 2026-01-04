@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Intercom Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.dashboard {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+    padding: 26px;
+    width: 92%;
+    max-width: 420px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+}
+h1 {
+    text-align: center;
+}
+.status {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+.idle { background: #3498db; }
+.active { background: #2ecc71; }
+.muted { background: #e74c3c; }
+
+.percent {
+    font-size: 2.4em;
+    text-align: center;
+    font-weight: bold;
+}
+
+input[type=range] {
+    width: 100%;
+    margin: 16px 0;
+}
+
+button {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.1em;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.mute {
+    background: #e74c3c;
+    color: white;
+}
+
+.unmute {
+    background: #2ecc71;
+    color: #062;
+}
+
+.footer {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+</style>
+</head>
+
+<body>
+<div class="dashboard">
+    <h1>🎙 Intercom</h1>
+
+    <div class="status">
+        Status:
+        <span id="statusBadge" class="badge idle">Idle</span>
+    </div>
+
+    <div class="percent"><span id="volValue">{{ vol }}</span>%</div>
+    <input type="range" min="0" max="100" value="{{ vol }}"
+           oninput="setVolume(this.value)">
+
+    <button id="muteBtn" onclick="toggleMute()">Mute</button>
+
+    <div class="footer">Intercom dashboard</div>
+</div>
+
+<script>
+function setVolume(val){
+    fetch('/set_volume?vol=' + val);
+    document.getElementById('volValue').innerText = val;
+}
+
+function toggleMute(){
+    fetch('/toggle_mute', {method: 'POST'});
+}
+
+function updateStatus(){
+    fetch('/status')
+        .then(r => r.json())
+        .then(s => {
+            const badge = document.getElementById('statusBadge');
+            const btn = document.getElementById('muteBtn');
+
+            badge.className = 'badge';
+
+            if (s.mute){
+                badge.innerText = 'Muted';
+                badge.classList.add('muted');
+                btn.innerText = 'Unmute';
+                btn.className = 'unmute';
+            } else if (s.call_active){
+                badge.innerText = 'Active';
+                badge.classList.add('active');
+                btn.innerText = 'Mute';
+                btn.className = 'mute';
+            } else {
+                badge.innerText = 'Idle';
+                badge.classList.add('idle');
+                btn.innerText = 'Mute';
+                btn.className = 'mute';
+            }
+        });
+}
+
+setInterval(updateStatus, 500);
+updateStatus();
+</script>
+</body>
+</html>
