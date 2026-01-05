@@ -14,7 +14,14 @@ import os
 UDP_IP = ""
 UDP_PORT = 50007
 CHUNK = 2048
+RATE = 16000
 LED_HOLD = 0.5
+
+PEERS = {
+    "kit1": "192.168.3.80",
+    "kit2": "192.168.3.153",
+    "kit3": "192.168.3.225"
+}
 
 # ================== STATE ==================
 mute = False
@@ -22,8 +29,11 @@ volume = 1.0
 last_audio_time = 0
 last_user_ip = "None"
 current_audio_level = 0.0
-leds = None
+tx_target = None
 start_time = time.time()
+
+tx_lock = threading.Lock()
+leds = None
 
 # ================== AUDIO ==================
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -32,8 +42,13 @@ sock.bind((UDP_IP, UDP_PORT))
 q = queue.Queue(maxsize=10)
 
 play = subprocess.Popen(
-    ["aplay", "-f", "S16_LE", "-r", "16000", "-c", "1"],
+    ["aplay", "-f", "S16_LE", "-r", str(RATE), "-c", "1"],
     stdin=subprocess.PIPE
+)
+
+rec = subprocess.Popen(
+    ["arecord", "-f", "S16_LE", "-r", str(RATE), "-c", "1"],
+    stdout=subprocess.PIPE
 )
 
 # ================== WEB UI ==================
@@ -41,7 +56,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("dashboard.html", vol=int(volume * 100), mute=mute)
+    return render_template("dashboard.html")
 
 @app.route("/set_volume")
 def set_volume():
@@ -57,86 +72,116 @@ def toggle_mute():
     tts.say("Muted" if mute else "Unmuted", lang="en-GB")
     return jsonify({"mute": mute})
 
-@app.route("/info")
-def info():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-        except:
-            ip = "Unknown"
-        finally:
-            s.close()
+@app.route("/set_target", methods=["POST"])
+def set_target():
+    global tx_target
+    data = request.json
+    target = data.get("target")
 
-        uptime_seconds = int(time.time() - start_time)
-        hours = uptime_seconds // 3600
-        minutes = (uptime_seconds % 3600) // 60
-        seconds = uptime_seconds % 60
-        uptime = f"{hours:02}:{minutes:02}:{seconds:02}"
+    with tx_lock:
+        if not target:
+            tx_target = None
+        elif target == "broadcast":
+            tx_target = "broadcast"
+        elif target in PEERS:
+            tx_target = PEERS[target]
+        else:
+            tx_target = None
 
-        return jsonify({
-            "hostname": os.uname().nodename if hasattr(os, "uname") else "Unknown",
-            "ip": ip,
-            "udp_port": UDP_PORT,
-            "http_port": 8080,
-            "uptime": uptime,
-            "mute": mute
-        })
-    except Exception as e:
-        print("Error in /info:", e)
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"tx_target": tx_target})
 
 @app.route("/status")
 def status():
+    now = time.time()
+    with tx_lock:
+        target = tx_target
+
+    return jsonify({
+        "mute": mute,
+        "audio_level": float(current_audio_level),
+        "last_user_ip": last_user_ip,
+        "connected": (now - last_audio_time) < 3,
+        "tx_target": target,
+        "peers": PEERS
+    })
+
+@app.route("/info")
+def info():
+    uptime = int(time.time() - start_time)
+
     try:
-        now = time.time()
-        connected = (now - last_audio_time) < 3.0
-        last_audio_fmt = time.strftime("%H:%M:%S", time.localtime(last_audio_time)) if last_audio_time > 0 else "Never"
-        return jsonify({
-            "connected": connected,
-            "last_audio_time": last_audio_fmt,
-            "last_user_ip": last_user_ip,
-            "mute": mute,
-            "audio_level": float(current_audio_level)
-        })
-    except Exception as e:
-        print("Error in /status:", e)
-        return jsonify({"error": str(e)}), 500
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        ip = "Unknown"
+
+    return jsonify({
+        "hostname": os.uname().nodename,
+        "ip": ip,
+        "udp_port": UDP_PORT,
+        "http_port": 8080,
+        "uptime": uptime
+    })
 
 def start_web():
     app.run(host="0.0.0.0", port=8080)
 
 # ================== THREADS ==================
 def receiver():
-    global last_user_ip, current_audio_level
+    global last_user_ip
     while True:
-        try:
-            data, addr = sock.recvfrom(CHUNK * 2)
-            last_user_ip = addr[0]
-            if not q.full():
-                q.put(data)
-        except Exception as e:
-            print("Receiver error:", e)
+        data, addr = sock.recvfrom(CHUNK * 2)
+        last_user_ip = addr[0]
+        if not q.full():
+            q.put(data)
 
 def player():
     global last_audio_time, current_audio_level
     while True:
         data = q.get()
-        now = time.time()
-        if not mute:
-            audio = np.frombuffer(data, dtype=np.int16)
-            current_audio_level = float(np.sqrt(np.mean(audio.astype(np.float32)**2)) / 32768)
-            audio = np.clip(audio * volume, -32768, 32767).astype(np.int16)
-            try:
-                play.stdin.write(audio.tobytes())
-                play.stdin.flush()
-            except:
-                pass
-        last_audio_time = now
+        last_audio_time = time.time()
+
+        if mute:
+            continue
+
+        audio = np.frombuffer(data, dtype=np.int16)
+        current_audio_level = float(
+            np.sqrt(np.mean(audio.astype(np.float32) ** 2)) / 32768
+        )
+
+        audio = np.clip(audio * volume, -32768, 32767).astype(np.int16)
+
+        try:
+            play.stdin.write(audio.tobytes())
+            play.stdin.flush()
+        except:
+            pass
+
+def sender():
+    while True:
+        with tx_lock:
+            target = tx_target
+
+        if not target or mute:
+            time.sleep(0.05)
+            continue
+
+        try:
+            data = rec.stdout.read(CHUNK * 2)
+
+            if target == "broadcast":
+                for ip in PEERS.values():
+                    sock.sendto(data, (ip, UDP_PORT))
+            else:
+                sock.sendto(data, (target, UDP_PORT))
+
+        except Exception as e:
+            print("Sender error:", e)
+            time.sleep(0.1)
 
 def led_manager():
-    global leds
     while True:
         if mute:
             leds.update(Leds.rgb_on(Color.RED))
@@ -162,23 +207,22 @@ try:
 
         threading.Thread(target=receiver, daemon=True).start()
         threading.Thread(target=player, daemon=True).start()
+        threading.Thread(target=sender, daemon=True).start()
         threading.Thread(target=led_manager, daemon=True).start()
         threading.Thread(target=button_handler, args=(board,), daemon=True).start()
         threading.Thread(target=start_web, daemon=True).start()
 
-        print("Intercom receiver running")
-        print("Button = mute/unmute")
+        print("Intercom running")
         print("Web UI: http://<PI_IP>:8080")
 
         while True:
             time.sleep(1)
 
 except KeyboardInterrupt:
-    print("Shutting down intercom...")
+    pass
 
 finally:
     try:
-        if leds:
-            leds.update(Leds.rgb_off())
+        leds.update(Leds.rgb_off())
     except:
         pass

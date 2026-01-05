@@ -137,6 +137,27 @@ button:hover {
                     </div>
                 </div>
             </div>
+
+            <!-- New Card: Dashboard Actions and Info -->
+            <div class="card">
+                <h2>WHAT YOU CAN DO FROM DASHBOARD NOW</h2>
+                <div>
+                    <label><strong>Select Target:</strong></label><br>
+                    <select id="targetSelect" onchange="setTarget()">
+                        <option value="">-- Select -- (Disconnect)</option>
+                        <option value="kit1">Kit 1</option>
+                        <option value="kit2">Kit 2</option>
+                        <option value="kit3">Kit 3</option>
+                        <option value="broadcast">Broadcast</option>
+                    </select>
+                </div>
+                <div class="info" style="margin-top:12px;">
+                    <strong>Who is talking:</strong> <span id="whoTalking">...</span><br>
+                    <strong>Audio Level:</strong> <span id="audioLevelText">...</span><br>
+                    <strong>Online State:</strong> <span id="onlineState">...</span><br>
+                    <strong>Mute (local):</strong> <span id="muteState">...</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -151,11 +172,47 @@ function updateStatus(){
             // Audio level bar (0-1)
             let pct = Math.round(Math.max(0, Math.min(1, s.audio_level)) * 100);
             document.getElementById('audioLevelBar').style.width = pct + '%';
+            // Update new dashboard card fields
+            document.getElementById('whoTalking').innerText = s.last_user_ip || 'None';
+            document.getElementById('audioLevelText').innerText = (s.audio_level*100).toFixed(1) + '%';
+            document.getElementById('muteState').innerText = s.mute ? 'Muted' : 'Unmuted';
+            // Set target select to current
+            let sel = document.getElementById('targetSelect');
+            let val = '';
+            if (s.tx_target === null || s.tx_target === undefined) {
+                document.getElementById('onlineState').innerText = 'Disconnected';
+                val = '';
+            } else {
+                document.getElementById('onlineState').innerText = s.connected ? 'Online' : 'Offline';
+                if (s.tx_target === 'broadcast') val = 'broadcast';
+                else {
+                    for (const [k, v] of Object.entries(s.peers)) {
+                        if (v === s.tx_target) val = k;
+                    }
+                }
+            }
+            if (sel && sel.value !== val) sel.value = val;
         })
         .catch(e => console.log('Failed to fetch status', e));
 }
 setInterval(updateStatus, 500);
 updateStatus();
+
+function setTarget() {
+    let val = document.getElementById('targetSelect').value;
+    // Send null for disconnect, not empty string
+    let target = val ? val : null;
+    fetch('/set_target', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({target: target})
+    }).then(() => {
+        // If disconnected, update UI immediately
+        if (!val) {
+            document.getElementById('onlineState').innerText = 'Disconnected';
+        }
+    });
+}
 
 
 function setVolume(val){
