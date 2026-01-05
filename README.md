@@ -163,7 +163,6 @@ GPIO 21 → Sirene knop
 - **Groen:** Systeem actief, geen audio
 - **Blauw:** Audio wordt ontvangen
 - **Rood:** Mute actief
-- **Paars:** Verbindingsproblemen
 
 ## 🐛 Troubleshooting
 
