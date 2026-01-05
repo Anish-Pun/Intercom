@@ -132,12 +132,12 @@ python3 hoofdmodule.py
 
 ### Zender GPIO Configuratie (Raspberry Pi)
 ```
-GPIO 5  → Kamer 1 knop
-GPIO 6  → Kamer 2 knop
-GPIO 13 → Kamer 3 knop
-GPIO 19 → Kamer 4 knop
-GPIO 26 → Alle kamers knop
-GPIO 21 → Sirene knop
+BTN_ROOM1 = 17
+BTN_ROOM2 = 6
+BTN_ROOM3 = 13
+BTN_ROOM4 = 19
+BTN_ALL   = 27
+BTN_SIREN = 21
 ```
 
 ### Ontvanger (AIY Voice Kit)
